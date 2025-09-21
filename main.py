@@ -17,7 +17,7 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 line_bot_api = LineBotApi(LINE_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
 
-DATA_PATH = "qa_data"  # JSON 存放資料夾
+DATA_PATH = "qa_data"  # JSON & TXT 存放資料夾
 
 
 @app.post("/webhook")
@@ -40,7 +40,9 @@ def handle_message(event):
     # ✅ /qa 指令
     if user_text.startswith("/qa"):
         parts = user_text.split()
-        filename = parts[1] if len(parts) > 1 else "main.json"
+        filename = parts[1] if len(parts) > 1 else "main"
+        if not filename.endswith(".json"):
+            filename += ".json"
         handle_qa(event, filename)
         return
 
@@ -59,7 +61,6 @@ def handle_qa(event, filename: str):
         # ⚠️ 智慧 fallback → 回到上一層
         warning_msg = TextSendMessage(text="⚠️ 資訊建構中，請稍後再試")
 
-        # 嘗試找「上一層」檔案
         parent = guess_parent(filename)
         parent_file = os.path.join(DATA_PATH, parent) if parent else None
 
@@ -94,7 +95,19 @@ def handle_qa(event, filename: str):
         )
 
     elif data["type"] == "text":
-        reply_msgs = [TextSendMessage(text=data.get("text", ""))]
+        text_content = data.get("text", "")
+
+        # ✅ 如果 text 指向 txt 檔
+        txt_path = os.path.join(DATA_PATH, f"{text_content}.txt")
+        if isinstance(text_content, str) and os.path.exists(txt_path):
+            with open(txt_path, "r", encoding="utf-8") as tf:
+                text_content = tf.read()
+
+        # ✅ 如果是 list → 轉換成多行
+        if isinstance(text_content, list):
+            text_content = "\n".join(text_content)
+
+        reply_msgs = [TextSendMessage(text=text_content)]
 
         if "options" in data:
             extra_menu = {
@@ -146,17 +159,16 @@ def build_flex_menu(data: dict) -> dict:
 def guess_parent(filename: str) -> str:
     """
     根據命名規則推測上一層檔案
-    ex: prod1_desc.json → prod1.json
-        prod1.json      → group1.json
-        group1.json     → prod.json
+    ex: 產品一_說明.json → 產品一.json
+        產品一.json     → prod.json
+        prod.json      → main.json
     """
-    if filename.startswith("prod1_"):
-        return "prod1.json"
-    if filename.startswith("prod1"):
-        return "group1.json"
-    if filename.startswith("group1"):
+    name = filename.replace(".json", "")
+    if "_說明" in name or "_成分" in name:
+        return f"{name.split('_')[0]}.json"
+    if name.startswith("產品一"):
         return "prod.json"
-    if filename.startswith("prod"):
+    if name.startswith("prod"):
         return "main.json"
     return "main.json"  # 預設回主選單
 

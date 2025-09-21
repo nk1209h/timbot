@@ -1,9 +1,9 @@
 {
   "type": "menu",
-  "title": "第一類產品",
+  "title": "產品分類",
   "options": [
-    { "label": "產品一", "next": "prod1.json" },
-    { "label": "產品二", "next": "prod2.json" },
+    { "label": "外用", "next": "group1.json" },
+    { "label": "內服", "next": "group2.json" },
     { "label": "⬅️ 上一頁", "next": "prod.json" },
     { "label": "🏠 主頁", "next": "main.json" }
   ]

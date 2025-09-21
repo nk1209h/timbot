@@ -1,0 +1,19 @@
+ 
+$ cd C:/Users/JELLY_CHOU/timbot
+
+ 
+$ git status
+=============================
+ 
+$ git add .
+=============================================================
+ 
+$ git commit -m "Update main.py with language commands and Flex help menu"
+
+==================
+ 
+$ git push origin main
+=====================================
+ 
+
+JELLY_CHOU@LAPTOP-JMFH22C1 MINGW64 ~/timbot (main)
