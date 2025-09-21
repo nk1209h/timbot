@@ -1,0 +1,10 @@
+{
+  "type": "menu",
+  "title": "第一類產品",
+  "options": [
+    { "label": "產品一", "next": "prod1.json" },
+    { "label": "產品二", "next": "prod2.json" },
+    { "label": "⬅️ 上一頁", "next": "prod.json" },
+    { "label": "🏠 主頁", "next": "main.json" }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "type": "text",
+  "title": "產品一說明",
+  "text": "這裡是產品一的詳細介紹說明內容……",
+  "options": [
+    { "label": "⬅️ 上一頁", "next": "prod1.json" },
+    { "label": "🏠 主頁", "next": "main.json" }
+  ]
+}

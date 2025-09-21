@@ -1,0 +1,10 @@
+{
+  "type": "menu",
+  "title": "產品一成分",
+  "options": [
+    { "label": "成分A", "next": "ing_a.json" },
+    { "label": "成分B", "next": "ing_b.json" },
+    { "label": "⬅️ 上一頁", "next": "prod1.json" },
+    { "label": "🏠 主頁", "next": "main.json" }
+  ]
+}

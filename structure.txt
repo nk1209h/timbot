@@ -1,0 +1,15 @@
+qa_data/
+│── main.json              # 主選單
+│── comp.json              # 公司介紹
+│── prod.json              # 產品分類
+│── system.json            # 制度介紹
+│
+├── group1.json            # 第一類產品
+│   ├── prod1.json         # 產品一選單
+│   │   ├── prod1_desc.json
+│   │   └── prod1_ingredients.json
+│   │       ├── ing_a.json
+│   │       └── ing_b.json
+│   └── prod2.json         # 產品二選單 (示意)
+│
+└── group2.json            # 第二類產品 (可再延伸)
