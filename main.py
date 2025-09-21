@@ -83,7 +83,7 @@ def handle_qa(event, filename: str):
         line_bot_api.reply_message(event.reply_token, reply_msgs)
         return
 
-    # ✅ 檔案存在 → 照常處理
+    # ✅ 檔案存在 →    照常處理
     with open(filepath, "r", encoding="utf-8") as f:
         data = json.load(f)
 
@@ -97,15 +97,26 @@ def handle_qa(event, filename: str):
     elif data["type"] == "text":
         text_content = data.get("text", "")
 
-        # ✅ 如果 text 指向 txt 檔
-        txt_path = os.path.join(DATA_PATH, f"{text_content}.txt")
-        if isinstance(text_content, str) and os.path.exists(txt_path):
-            with open(txt_path, "r", encoding="utf-8") as tf:
-                text_content = tf.read()
-
         # ✅ 如果是 list → 轉換成多行
         if isinstance(text_content, list):
             text_content = "\n".join(text_content)
+
+        # ✅ 如果是 @檔名 → 讀取 TXT
+        elif isinstance(text_content, str) and text_content.startswith("@"):
+            filename = text_content[1:] + ".txt"
+            txt_path = os.path.join(DATA_PATH, filename)
+            if os.path.exists(txt_path):
+                with open(txt_path, "r", encoding="utf-8") as tf:
+                    text_content = tf.read()
+            else:
+                text_content = f"⚠️ 找不到外部檔案 {filename}"
+
+        # ✅ 如果是純字串 → 直接顯示
+        elif isinstance(text_content, str):
+            text_content = text_content.strip()
+
+        if not text_content:
+            text_content = "⚠️ 資訊建構中"
 
         reply_msgs = [TextSendMessage(text=text_content)]
 
