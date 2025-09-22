@@ -37,16 +37,19 @@ async def callback(request: Request):
 def handle_message(event):
     user_text = event.message.text.strip()
 
-    # ✅ /qa 指令
+    # ✅ QA 指令
     if user_text.startswith("/qa"):
         parts = user_text.split()
         filename = parts[1] if len(parts) > 1 else "main"
         if not filename.endswith(".json"):
             filename += ".json"
-        handle_qa(event, filename)
+        success = handle_qa(event, filename, user_text)
+        if not success:
+            gpt_reply = call_openai(user_text, lang="zh")
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=gpt_reply))
         return
 
-    # ✅ 預設走 GPT
+    # ✅ 其它情況 → 直接丟 GPT
     gpt_reply = call_openai(user_text, lang="zh")
     line_bot_api.reply_message(event.reply_token, TextSendMessage(text=gpt_reply))
 
@@ -54,21 +57,23 @@ def handle_message(event):
 # ------------------------------
 #   QA 功能處理
 # ------------------------------
-def handle_qa(event, filename: str):
+def handle_qa(event, filename: str, user_text: str) -> bool:
     filepath = os.path.join(DATA_PATH, filename)
 
     if not os.path.exists(filepath):
-        # ⚠️ 智慧 fallback → 回到上一層
-        warning_msg = TextSendMessage(text="⚠️ 資訊建構中，請稍後再試")
+        # ⚠️ fallback → 先回訊息，再交給 GPT
+        warning_msg = TextSendMessage(text="⚠️ 資訊建構中，為您呼叫 GPT 來補充回答…")
 
         parent = guess_parent(filename)
         parent_file = os.path.join(DATA_PATH, parent) if parent else None
+
+        reply_msgs = [warning_msg]
 
         if parent_file and os.path.exists(parent_file):
             with open(parent_file, "r", encoding="utf-8") as f:
                 parent_data = json.load(f)
             flex = build_flex_menu(parent_data)
-            reply_msgs = [warning_msg, FlexSendMessage(alt_text="返回上一頁", contents=flex)]
+            reply_msgs.append(FlexSendMessage(alt_text="返回上一頁", contents=flex))
         else:
             # 如果找不到上一層，就回主選單
             main_file = os.path.join(DATA_PATH, "main.json")
@@ -76,14 +81,12 @@ def handle_qa(event, filename: str):
                 with open(main_file, "r", encoding="utf-8") as f:
                     main_data = json.load(f)
                 flex = build_flex_menu(main_data)
-                reply_msgs = [warning_msg, FlexSendMessage(alt_text="主選單", contents=flex)]
-            else:
-                reply_msgs = [warning_msg]
+                reply_msgs.append(FlexSendMessage(alt_text="主選單", contents=flex))
 
         line_bot_api.reply_message(event.reply_token, reply_msgs)
-        return
+        return False  # 讓外層 fallback GPT
 
-    # ✅ 檔案存在 →    照常處理
+    # ✅ 檔案存在 → 照常處理
     with open(filepath, "r", encoding="utf-8") as f:
         data = json.load(f)
 
@@ -93,6 +96,7 @@ def handle_qa(event, filename: str):
             event.reply_token,
             FlexSendMessage(alt_text=data.get("title", "選單"), contents=flex)
         )
+        return True
 
     elif data["type"] == "text":
         text_content = data.get("text", "")
@@ -118,9 +122,13 @@ def handle_qa(event, filename: str):
         if not text_content:
             text_content = "⚠️ 資訊建構中"
 
-        reply_msgs = [TextSendMessage(text=text_content)]
+        reply_msgs = []
 
-        if "options" in data:
+        # ✅ reverse_order 控制順序
+        reverse_order = data.get("reverse_order", False)
+
+        if reverse_order and "options" in data:
+            # 先選單，後文字
             extra_menu = {
                 "type": "menu",
                 "title": data.get("title", "選單"),
@@ -128,8 +136,21 @@ def handle_qa(event, filename: str):
             }
             flex = build_flex_menu(extra_menu)
             reply_msgs.append(FlexSendMessage(alt_text="返回選單", contents=flex))
+            reply_msgs.append(TextSendMessage(text=text_content))
+        else:
+            # 預設：先文字，後選單
+            reply_msgs.append(TextSendMessage(text=text_content))
+            if "options" in data:
+                extra_menu = {
+                    "type": "menu",
+                    "title": data.get("title", "選單"),
+                    "options": data["options"]
+                }
+                flex = build_flex_menu(extra_menu)
+                reply_msgs.append(FlexSendMessage(alt_text="返回選單", contents=flex))
 
         line_bot_api.reply_message(event.reply_token, reply_msgs)
+        return True
 
 
 def build_flex_menu(data: dict) -> dict:
@@ -192,14 +213,10 @@ def call_openai(prompt: str, lang: str = "zh") -> str:
         url = "https://api.openai.com/v1/chat/completions"
         headers = {"Authorization": f"Bearer {OPENAI_API_KEY}"}
 
-        system_prompts = {
-            "zh": "你是一個助理，請一律使用繁體中文回答使用者。"
-        }
-
         payload = {
-            "model": "gpt-4o-mini",
+            "model": "gpt-5-chat-latest",  # ✅ 預設最新最強
             "messages": [
-                {"role": "system", "content": system_prompts.get(lang, system_prompts["zh"])},
+                {"role": "system", "content": "你是一個助理，請一律使用繁體中文回答使用者。"},
                 {"role": "user", "content": prompt}
             ]
         }

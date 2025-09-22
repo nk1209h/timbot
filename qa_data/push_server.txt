@@ -1,19 +1,12 @@
  
-$ cd C:/Users/JELLY_CHOU/timbot
+cd C:/Users/JELLY_CHOU/timbot
+ 
+git status
 
- 
-$ git status
-=============================
- 
-$ git add .
+git add .
 =============================================================
  
-$ git commit -m "Update main.py with language commands and Flex help menu"
-
-==================
+git commit -m "GPT 預設改成 gpt-5-chat-latest"
  
-$ git push origin main
-=====================================
+git push origin main
  
-
-JELLY_CHOU@LAPTOP-JMFH22C1 MINGW64 ~/timbot (main)
