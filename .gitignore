@@ -1,0 +1,15 @@
+# 環境設定
+.env
+*.env
+
+# 秘密檔案
+replacements.txt
+secrets.json
+
+# Python 暫存檔
+__pycache__/
+*.pyc
+
+# 其他常見暫存
+*.log
+

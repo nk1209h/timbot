@@ -8,11 +8,8 @@ echo === 新增所有檔案 ===
 git add .
 
 echo.
-set /p msg="請輸入這次 Commit 訊息（預設: Auto update）: "
-if "%msg%"=="" set msg=Auto update
-
-git commit -m "%msg%"
-
+git commit -m "GPT 預設改成 gpt-5-chat-latest"
+ 
 echo.
 echo === 推送到 GitHub main 分支 ===
 git push origin main

@@ -8,6 +8,9 @@ from linebot.models import (
     MessageEvent, TextMessage, TextSendMessage, FlexSendMessage
 )
 
+# ------------------------------
+#   基本設定
+# ------------------------------
 app = FastAPI()
 
 LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET")
@@ -19,7 +22,15 @@ handler = WebhookHandler(LINE_CHANNEL_SECRET)
 
 DATA_PATH = "qa_data"  # JSON & TXT 存放資料夾
 
+# ------------------------------
+#   載入 role.json
+# ------------------------------
+with open("role.json", "r", encoding="utf-8") as f:
+    role_data = json.load(f)
 
+# ------------------------------
+#   Webhook
+# ------------------------------
 @app.post("/webhook")
 async def callback(request: Request):
     signature = request.headers.get("X-Line-Signature")
@@ -32,7 +43,9 @@ async def callback(request: Request):
         raise HTTPException(status_code=400, detail="Invalid signature")
     return "OK"
 
-
+# ------------------------------
+#   處理使用者訊息
+# ------------------------------
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     user_text = event.message.text.strip()
@@ -45,23 +58,23 @@ def handle_message(event):
             filename += ".json"
         success = handle_qa(event, filename, user_text)
         if not success:
-            gpt_reply = call_openai(user_text, lang="zh")
+            role = choose_role(user_text)
+            gpt_reply = call_openai(user_text, role=role)
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=gpt_reply))
         return
 
-    # ✅ 其它情況 → 直接丟 GPT
-    gpt_reply = call_openai(user_text, lang="zh")
+    # ✅ 一般情況 → 自動選角色後丟 GPT
+    role = choose_role(user_text)
+    gpt_reply = call_openai(user_text, role=role)
     line_bot_api.reply_message(event.reply_token, TextSendMessage(text=gpt_reply))
 
-
 # ------------------------------
-#   QA 功能處理
+#   QA 功能
 # ------------------------------
 def handle_qa(event, filename: str, user_text: str) -> bool:
     filepath = os.path.join(DATA_PATH, filename)
 
     if not os.path.exists(filepath):
-        # ⚠️ fallback → 先回訊息，再交給 GPT
         warning_msg = TextSendMessage(text="⚠️ 資訊建構中，為您呼叫 GPT 來補充回答…")
 
         parent = guess_parent(filename)
@@ -75,7 +88,6 @@ def handle_qa(event, filename: str, user_text: str) -> bool:
             flex = build_flex_menu(parent_data)
             reply_msgs.append(FlexSendMessage(alt_text="返回上一頁", contents=flex))
         else:
-            # 如果找不到上一層，就回主選單
             main_file = os.path.join(DATA_PATH, "main.json")
             if os.path.exists(main_file):
                 with open(main_file, "r", encoding="utf-8") as f:
@@ -84,7 +96,7 @@ def handle_qa(event, filename: str, user_text: str) -> bool:
                 reply_msgs.append(FlexSendMessage(alt_text="主選單", contents=flex))
 
         line_bot_api.reply_message(event.reply_token, reply_msgs)
-        return False  # 讓外層 fallback GPT
+        return False
 
     # ✅ 檔案存在 → 照常處理
     with open(filepath, "r", encoding="utf-8") as f:
@@ -101,11 +113,8 @@ def handle_qa(event, filename: str, user_text: str) -> bool:
     elif data["type"] == "text":
         text_content = data.get("text", "")
 
-        # ✅ 如果是 list → 轉換成多行
         if isinstance(text_content, list):
             text_content = "\n".join(text_content)
-
-        # ✅ 如果是 @檔名 → 讀取 TXT
         elif isinstance(text_content, str) and text_content.startswith("@"):
             filename = text_content[1:] + ".txt"
             txt_path = os.path.join(DATA_PATH, filename)
@@ -114,8 +123,6 @@ def handle_qa(event, filename: str, user_text: str) -> bool:
                     text_content = tf.read()
             else:
                 text_content = f"⚠️ 找不到外部檔案 {filename}"
-
-        # ✅ 如果是純字串 → 直接顯示
         elif isinstance(text_content, str):
             text_content = text_content.strip()
 
@@ -123,12 +130,9 @@ def handle_qa(event, filename: str, user_text: str) -> bool:
             text_content = "⚠️ 資訊建構中"
 
         reply_msgs = []
-
-        # ✅ reverse_order 控制順序
         reverse_order = data.get("reverse_order", False)
 
         if reverse_order and "options" in data:
-            # 先選單，後文字
             extra_menu = {
                 "type": "menu",
                 "title": data.get("title", "選單"),
@@ -138,7 +142,6 @@ def handle_qa(event, filename: str, user_text: str) -> bool:
             reply_msgs.append(FlexSendMessage(alt_text="返回選單", contents=flex))
             reply_msgs.append(TextSendMessage(text=text_content))
         else:
-            # 預設：先文字，後選單
             reply_msgs.append(TextSendMessage(text=text_content))
             if "options" in data:
                 extra_menu = {
@@ -152,9 +155,10 @@ def handle_qa(event, filename: str, user_text: str) -> bool:
         line_bot_api.reply_message(event.reply_token, reply_msgs)
         return True
 
-
+# ------------------------------
+#   Flex Menu Builder
+# ------------------------------
 def build_flex_menu(data: dict) -> dict:
-    """把 JSON 轉成 LINE Flex Message"""
     contents = [
         {
             "type": "text",
@@ -187,14 +191,10 @@ def build_flex_menu(data: dict) -> dict:
 
     return {"type": "bubble", "size": "mega", "body": {"type": "box", "layout": "vertical", "contents": contents}}
 
-
+# ------------------------------
+#   QA 父層猜測
+# ------------------------------
 def guess_parent(filename: str) -> str:
-    """
-    根據命名規則推測上一層檔案
-    ex: 產品一_說明.json → 產品一.json
-        產品一.json     → prod.json
-        prod.json      → main.json
-    """
     name = filename.replace(".json", "")
     if "_說明" in name or "_成分" in name:
         return f"{name.split('_')[0]}.json"
@@ -202,21 +202,33 @@ def guess_parent(filename: str) -> str:
         return "prod.json"
     if name.startswith("prod"):
         return "main.json"
-    return "main.json"  # 預設回主選單
+    return "main.json"
 
+# ------------------------------
+#   角色判斷
+# ------------------------------
+def choose_role(user_text: str) -> str:
+    text = user_text.lower()
+    for role, config in role_data.items():
+        keywords = config.get("keywords", [])
+        if any(k in text for k in keywords):
+            return role
+    return "default"
 
 # ------------------------------
 #   OpenAI API 呼叫
 # ------------------------------
-def call_openai(prompt: str, lang: str = "zh") -> str:
+def call_openai(prompt: str, role: str = "default") -> str:
+    system_prompt = role_data.get(role, role_data["default"])["prompt"]
+
     try:
         url = "https://api.openai.com/v1/chat/completions"
         headers = {"Authorization": f"Bearer {OPENAI_API_KEY}"}
 
         payload = {
-            "model": "gpt-5-chat-latest",  # ✅ 預設最新最強
+            "model": "gpt-5-chat-latest",
             "messages": [
-                {"role": "system", "content": "你是一個助理，請一律使用繁體中文回答使用者。"},
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": prompt}
             ]
         }
