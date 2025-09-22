@@ -7,7 +7,7 @@ if not API_KEY:
 
 headers = {"Authorization": f"Bearer {API_KEY}"}
 
-# 1️⃣ 列出所有可用模  型
+# 1️⃣ 列出所有可用模型
 print("=== 可用模型 ===")
 resp = requests.get("https://api.openai.com/v1/models", headers=headers)
 if resp.status_code == 200:
